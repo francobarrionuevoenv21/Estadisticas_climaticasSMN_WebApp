@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Históricos Estaciones SMN Georreferenciados V1</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="css/leaflet.css">
+    <script src="js/leaflet.js"></script>
+    <style>
+        body {
+            padding: 0;
+            margin: 10;
+        }
+        html, body, #map {
+            height: 100vh; /* Full viewport height */
+            width: 100vw; /* Full viewport width */
+            margin: 0;
+            padding: 0;
+        }
+        .info {
+            padding: 6px 8px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: rgba(255,255,255,0.8);
+            /*box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;*/
+            width: 20em;
+        }
+
+        .info_SMN {
+            padding: 6px 8px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: rgba(255,255,255,0.8);
+            /*box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;*/
+            width: 20em;
+        }
+        .info h4 {
+            margin: 0 0 5px;
+            color: #1d478b;
+        }
+        .info #current_feature {
+            margin: 6px 0;
+        }
+
+        .info_SMN #current_feature_SMN {
+            margin: 6px 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+        }
+
+        #panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 220px; /* Fixed width */
+            height: 70px; /* Fixed height */
+            background: rgba(255,255,255,0.8);
+            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+            padding: 5px;
+            z-index: 1000;
+            flex-direction: column; /* Ensures child elements stack properly */
+        }
+
+        .custom-control {
+        padding: 0; /* Add space between the controls */
+        }
+        
+        .leaflet-control-layers {
+            min-width: 250px !important; /* Set a minimum width */
+            max-width: 350px; /* Optional: set a max width */
+            min-height: 50px !important; /* Set a minimum height */
+            max-height: 400px; /* Optional: set a max height */
+            padding: 0px; /* Add padding */
+            background: transparent !important;
+            border: none !important; /* Make the border line transparent */
+        }
+
+        #about-panel {
+            position: absolute;
+            bottom: 12px; /* Adjust to stay above zoom controls */
+            left: 50px;   /* Near the zoom control */
+            z-index: 1000;
+            font-family: Arial, sans-serif;
+        }
+
+        #about-panel button {
+            background: #fff;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+            border-radius: 4px;
+        }
+
+        #about-content {
+            margin-top: 5px;
+            background: rgba(255,255,255,0.95);
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 13px;
+            color: #003366;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            max-width: 200px;
+            display: block;
+        }
+
+        #about-content.hidden {
+            display: none;
+        }
+
+        #about-content a {
+            color: #0055cc;
+            text-decoration: none;
+        }
+
+
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="about-panel">
+        <button id="about-toggle">ℹ️</button>
+        <div id="about-content" class="hidden">
+          <strong>Creado por</strong><br>
+          Franco Barrionuevo<br>
+          <a href="mailto:francod.barrionuevo@gmail.com">francod.barrionuevo@gmail.com</a>
+        </div>
+    </div>
+    <script>
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // Initial settings
+        let map = L.map("map").setView([-55, -60], 3);
+        map.zoomControl.setPosition('bottomleft');
+        -
+        L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attribution/">CartoDB</a>',
+            subdomains: "abcd",
+            maxZoom: 19
+        }).addTo(map);
+
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // info divs for references and meteorological data table
+        let info = L.control({position: "topright"});
+        let info_SMN = L.control({position: "bottomright"});
+
+        function infoDiv(divWidth) {
+            if (info._map) {
+                // Remove existing control if it's already added to the map
+                info.remove();
+            }
+
+            info.onAdd = function() {
+                let div = L.DomUtil.create("div", "info");
+                div.innerHTML = '<h4 id="dynamic-title" style="font-size: 17px;">Referencias</h4><p id="current_feature"></p>';
+                div.style.width = divWidth;
+                return div; // Return the div to be added to the map
+            };
+
+            info.addTo(map); // Add the control to the map
+        }
+
+        function infoDiv_SMN(divWidth) {
+            if (info_SMN._map) {
+                // Remove existing control if it's already added to the map
+                info_SMN.remove();
+            }
+
+            info_SMN.onAdd = function() {
+                let div = L.DomUtil.create("div", "info");
+                div.innerHTML = '<h4 id="dynamic-title_SMN" style="font-size: 18px;">Tabla datos históricos SMN (1991-2020)</h4><p id="current_feature_SMN"></p>';
+                div.style.width = divWidth;
+                return div; // Return the div to be added to the map
+            };
+
+            info_SMN.addTo(map); // Add the control to the map
+        }
+        
+        // Initialize infoDiv and infoDiv_SMN
+        infoDiv('15em')
+        infoDiv_SMN('25em')
+
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // Highlighting style for features in departamentos and cuencas layers
+        let highlightStyle = {
+            weight: 5,
+            color: "yellow",
+            fillOpacity: 0.5
+        };
+
+        let info_p = document.getElementById("current_feature"); // If any doubt check info.onAdd
+        let info_h4 = document.getElementById("dynamic-title");
+
+        function highlight_feature_DeptoBound(e) {
+            infoDiv('20em')
+            info_p = document.getElementById("current_feature");
+            info_h4 = document.getElementById("dynamic-title");
+            e.target.setStyle(highlightStyle);
+            e.target.bringToFront();
+            info_h4.innerText = "Departamentos"
+            info_p.innerHTML =
+                "<b>Provincia:</b> " + e.target.feature.properties.nam_left + "<br>" +
+                "<b>Departamento:</b> " + e.target.feature.properties.nam_right + "<br>";
+        }
+
+        function highlight_feature_Cuencas(e) {
+            infoDiv('20em')
+            info_p = document.getElementById("current_feature");
+            info_h4 = document.getElementById("dynamic-title");
+            e.target.setStyle(highlightStyle);
+            e.target.bringToFront();
+            info_h4.innerText = "Cuencas hidrográficas"
+            info_p.innerHTML =
+                "<b>Nombre cuenca:</b> " + e.target.feature.properties.cuenca + "<br>"
+        }
+
+        function reset_highlight(e, gjLayer) {
+            infoDiv('15em')
+            e.target.bringToBack();
+            gjLayer.resetStyle(e.target);
+            info_p.innerHTML = "";
+            info_h4.innerText = "Referencias";
+        }
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // Setting display of SMN meteorological data
+        function info_feature_SMNStats(e) {
+            infoDiv_SMN('65em');
+            let info_p_SMNdata = document.getElementById("current_feature_SMN");
+            let info_h4_SMNdata = document.getElementById("dynamic-title_SMN");
+
+            // Define month names
+            const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+                            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+            // Extract data
+            let data = {
+                "T Media (°C)": (e.target.feature.properties.T_PtoS || "").trim().split(" "),
+                "T Máx. (°C)": (e.target.feature.properties.TMax_PtoS || "").trim().split(" "),
+                "T Mín (°C)": (e.target.feature.properties.TMin_PtoS || "").trim().split(" "),
+                "Precipitación (mm)": (e.target.feature.properties.PP_PtoS || "").trim().split(" "),
+                "Hum. Relativa (%)": (e.target.feature.properties.HS_PtoS || "").trim().split(" "),
+                "Vel. del Viento (km/h) [2011-2020]": (e.target.feature.properties.VV_PtoS || "").trim().split(" ")
+                
+            };
+
+            // Create the table
+            let table = "<table border='1' style='border-collapse: collapse; width: 100%; text-align: center;'>";
+            
+            // Add header row
+            table += `<tr><th>Mes</th>`;
+            for (let i = 0; i < 12; i++) {
+                table += `<th>${months[i]}</th>`;
+            }
+            table += `</tr>`;
+
+            // Add data rows
+            for (let key in data) {
+                table += `<tr><td><b>${key}</b></td>`;
+                for (let i = 0; i < 12; i++) {
+                    table += `<td>${data[key][i] || '-'}</td>`; // Use '-' if missing data
+                }
+                table += `</tr>`;
+            }
+
+            table += `</table>`;
+
+            // Insert table into the info panel
+            info_p_SMNdata.innerHTML = `<span style="font-size: 16px;">Estación: <b>${e.target.feature.properties.nombre}</b></span><br><br>` + 
+                                        `<span style="font-size: 14px;">${table}</span>`;
+        }
+
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // Initializing political boundaries layers
+        let geojsonLayer02;
+        let Boundaries02 = L.layerGroup()// Departments boundaries
+
+        // Initializing basins and meteorological data layers
+        let geojsonLayer06;
+        let geojsonLayer07;
+        let hidrogANDClimat01 = L.layerGroup()
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // Loading Argentina boundaries layer
+        fetch("data/ArgentinaBoundaries_IGN_4326_03.json")
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {  // Add GeoJSON layer to the map once the file is loaded
+            L.geoJSON(data, {style: {weight : 2,
+                color : "black",
+                fillColor : "None",
+                fillOpacity : 0
+                }
+            })
+                .addTo(map);
+            });
+        
+        // Loading Argentina provinces boundaries layer
+        fetch("data/Provincias_IGN_4326yMalvinas05.geojson")
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {  // Add GeoJSON layer to the map once the file is loaded
+                L.geoJSON(data, {style : {
+                    weight : 1.4,
+                    color : "black",
+                    fillColor : "none",
+                    fillOpacity : 0.2,
+                    }
+            })
+                .addTo(map);
+            });
+
+        // Loading Argentina departments boundaries layer
+        fetch("data/Departamentos_corr_4326.json")
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                    geojsonLayer02 = L.geoJSON(data, {
+                        style: {weight : 0.75,
+                                color : "#362b53",
+                                fillColor : "yellow",
+                                fillOpacity : 0.1},
+                        onEachFeature: function(feature, layer) {
+                            layer.on("mouseover", highlight_feature_DeptoBound);
+                            layer.on("mouseout", function(e) {
+                                reset_highlight(e, geojsonLayer02);
+                            });
+                        }
+                    });
+                    Boundaries02.addLayer(geojsonLayer02);
+                });
+
+        // Loading Argentina basins layer
+        fetch("data/Cuencas_IGN_COHIFE_4326.json")
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                    geojsonLayer07 = L.geoJSON(data, {
+                        style: {
+                            weight : 0.75,
+                            color : "#362b53",
+                            fillColor : "#21DEBE",
+                            fillOpacity : 0.2},
+                        onEachFeature: function(feature, layer) {
+                            layer.on("mouseover", highlight_feature_Cuencas);
+                            layer.on("mouseout", function(e) {
+                                reset_highlight(e, geojsonLayer07);
+                            });
+                        }
+                    });
+                    hidrogANDClimat01.addLayer(geojsonLayer07);
+            });
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // SMN stations data
+
+        // Setting stations' icon configuration
+        let myIcon = L.icon({
+            iconUrl: 'images/station.png',
+            iconSize:     [28, 28], // width and height of the image in pixels
+            iconAnchor:   [14, 14], // point of the icon which will correspond to marker's location
+        })
+
+        let myBigIcon = L.icon({
+            iconUrl: 'images/station.png',
+            iconSize:     [60, 60], // width and height of the image in pixels
+            iconAnchor:   [30, 30], // point of the icon which will correspond to marker's location
+        })
+
+        // Variable to track if the marker is clicked
+        let clickMarkerTrack = false;
+
+        // Loading stations layer with historical data
+        fetch("data/SMN_stats_merged.geojson")
+            .then(function(response) {
+            return response.json();
+            })
+            .then(function(data) {
+            geojsonLayer06 = L.geoJSON(data, {
+                pointToLayer: function(feature, latlng) {
+                return L.marker(latlng, { icon: myIcon }); // Use your options for markers
+                },
+                onEachFeature: function(feature, layer) {
+                // Add first mouseover event listener
+                layer.on("click", function(e) {
+                    if (clickMarkerTrack == false) {
+                    info_feature_SMNStats(e, feature); // Call your highlight function
+                    layer.setIcon(myBigIcon);
+                    clickMarkerTrack = true;
+                    } else {
+                    layer.setIcon(myIcon);
+                    clickMarkerTrack = false;
+                    infoDiv_SMN('25em');
+                    }
+                });
+                }
+            }).addTo(map); // Add the layer directly to the map
+            });
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // Complementary layers controller
+        
+        // Overlay layers
+        let overlayBound = {
+            "<b>Departamentos</b>": Boundaries02,
+            "<b>Cuencas hidrográficas</b>": hidrogANDClimat01
+        };
+        
+        // Panel for controller
+        let panel = L.control({ position: "topleft" });
+        panel.onAdd = function(map) {
+            let div = L.DomUtil.create("div", "info");
+            div.id = "panel";
+            return div;
+        };
+        panel.addTo(map);
+
+        // Layers controller
+        let customControl01 = L.control.layers(null, overlayBound, {collapsed: false });
+
+        // Panel settings
+        let panelDiv = document.getElementById("panel");
+        if (panelDiv) {
+            let title = document.createElement("h4");
+            title.innerText = "Capas";
+            title.style.fontSize = "17px";
+            title.style.marginBottom = "0px";
+            panelDiv.appendChild(title);
+
+            customControl01.addTo(map);
+            panelDiv.appendChild(customControl01.getContainer());
+        }
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // About panel 
+        document.getElementById("about-toggle").addEventListener("click", function () {
+            document.getElementById("about-content").classList.toggle("hidden");
+        });
+        // -------------------------------------------------------------------------------------------------------------------------------------
+        // -------------------------------------------------------------------------------------------------------------------------------------
+    </script>
+</body>
+</html>
