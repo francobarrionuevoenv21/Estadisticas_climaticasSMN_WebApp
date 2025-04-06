@@ -1,5 +1,7 @@
 # Históricos Estaciones SMN Georreferenciados V1 Web Map App
 
+![image](https://github.com/user-attachments/assets/64e811a0-debf-462d-9fd3-12bb47bfeeab)
+
 ## Descripción/Description
 
 [Español]
